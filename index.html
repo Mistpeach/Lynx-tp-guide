@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lynx服务器 · 传送导航</title>
+    <!-- Tailwind + Font Awesome -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3B82F6',
+                        secondary: '#10B981',
+                        neutral: '#64748B',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* 自定义工具类 + 字体 (保留原有风格) */
+        @layer utilities {
+            .card-shadow {
+                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            }
+            .card-hover {
+                transition: all 0.3s ease;
+            }
+            .card-hover:hover {
+                transform: translateY(-5px);
+                box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            }
+            .bg-blur {
+                backdrop-filter: blur(8px);
+                -webkit-backdrop-filter: blur(8px);
+            }
+        }
+
+        /* 自定义字体 (保留原路径，若不存在会回退) */
+        @font-face {
+            font-family: 'CustomFont';
+            src: url('./assets/fonts/custom-font.ttf') format('truetype');
+            font-weight: normal;
+            font-style: normal;
+            font-display: swap;
+        }
+
+        body {
+            font-family: 'CustomFont', system-ui, -apple-system, sans-serif;
+        }
+
+        /* 标签激活样式 */
+        .filter-tag.active {
+            background-color: #3B82F6 !important;
+            color: white !important;
+        }
+    </style>
+</head>
+<body class="min-h-screen" style="background-image: url('./pic/bg.jpg'); background-size: cover; background-position: center; background-attachment: fixed;">
+    <div class="container mx-auto px-4 py-8">
+        <!-- 头部区域 -->
+            <header class="mb-6">
+                <!-- 第一行：主标题 -->
+                <h1 class="text-[clamp(1.8rem,4vw,2.5rem)] font-bold text-gray-800 drop-shadow leading-tight mb-2">
+                    Ciallo～ (∠・ω< )⌒★ 你要去哪里喵？
+                </h1>
+                
+                <!-- 第二行：左侧小字说明 + 右侧标签筛选（flex布局） -->
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <p class="text-gray-600 text-sm md:text-base flex items-center gap-1">
+                        <i class="fa fa-hand-pointer-o text-primary"></i> 
+                        本工具由awu2333维护，有问题请群内联系喵
+                    </p>
+                    <div id="tagFilters" class="flex flex-wrap gap-2">
+                        <!-- 标签按钮由JS动态生成 -->
+                    </div>
+                </div>
+            </header>
+
+        <!-- 卡片网格 -->
+        <div id="cardsGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <!-- 所有卡片由JavaScript动态渲染，干净无PHP -->
+        </div>
+    </div>
+
+    <script>
+        (function(){
+            "use strict";
+
+            // ---------- 📦 静态数据 (可自由修改 / 替换为 fetch items.json) ----------
+            const itemsData = [
+                {
+                    id: "item1",
+                    title: "服务器主城",
+                    image: "./pic/maincity.png",  // 示例图片
+                    tags: ["地标", "主城"],
+                    buttons: [
+                        { label: "tp指令", text: "/tp -2333 72 -2489" }
+                    ]
+                },
+                
+                {
+                    id: "item2",
+                    title: "藻泽刷怪塔",
+                    image: "./pic/swamp.png",
+                    tags: ["刷怪塔"],
+                    buttons: [
+                        { label: "tp指令", text: "/tp 725 183 712" }
+                    ]
+                },
+                
+                {
+                    id: "item3",
+                    title: "树场",
+                    image: "./pic/treefarm.png",
+                    tags: ["红石机器"],
+                    buttons: [
+                        { label: "tp指令", text: "/tp 2341 72-2489" },
+                        { label: "召唤假人", text: "/player Log spawn at -2342.8 71.5 -2492.4 facing 140.2 1.8 in minecraft:overworld" }
+                    ]
+                },
+                
+                {
+                    id: "item999",
+                    title: "新增传送点,假人卡片",
+                    image: "./pic/add.png",
+                    tags: ["工具"],
+                    buttons: [
+                        { label: "点击复制链接，使用浏览器打开", text: "https://www.wjx.top/vm/PDfYhMa.aspx" }
+                    ]
+                }
+                
+                
+                
+                
+                
+                
+                
+            ];
+
+            // ---------- DOM 元素 ----------
+            const tagContainer = document.getElementById('tagFilters');
+            const cardsGrid = document.getElementById('cardsGrid');
+
+            // ---------- 辅助函数：提取所有标签并排序 ----------
+            function getAllUniqueTags() {
+                const tagSet = new Set();
+                itemsData.forEach(item => {
+                    (item.tags || []).forEach(tag => {
+                        if (tag && typeof tag === 'string') tagSet.add(tag.trim());
+                    });
+                });
+                return Array.from(tagSet).sort((a, b) => a.localeCompare(b));
+            }
+
+            // ---------- 渲染标签筛选按钮 ----------
+            function renderFilterTags() {
+                const tags = getAllUniqueTags();
+                // 清空并添加“全部”按钮
+                tagContainer.innerHTML = `
+                    <button class="filter-tag bg-primary text-white px-3 py-1 rounded-full text-sm transition-colors active" data-tag="all">
+                        全部
+                    </button>
+                `;
+                // 添加各个标签
+                tags.forEach(tag => {
+                    const btn = document.createElement('button');
+                    btn.className = 'filter-tag bg-gray-200 hover:bg-primary hover:text-white px-3 py-1 rounded-full text-sm transition-colors';
+                    btn.setAttribute('data-tag', tag);
+                    btn.textContent = tag;
+                    tagContainer.appendChild(btn);
+                });
+            }
+
+            // ---------- 渲染卡片 (基于itemsData) ----------
+            function renderCards() {
+                if (!cardsGrid) return;
+                let html = '';
+                itemsData.forEach(item => {
+                    const tagsString = (item.tags || []).join(',');  // 用于 data-tags 筛选
+                    // 转义属性 (防止XSS)
+                    const safeTitle = escapeHtml(item.title);
+                    const safeImage = escapeHtml(item.image);
+                    
+                    // 构建按钮html
+                    let buttonsHtml = '';
+                    (item.buttons || []).forEach(btn => {
+                        const safeLabel = escapeHtml(btn.label);
+                        const safeText = escapeHtml(btn.text);
+                        buttonsHtml += `
+                            <button class="copy-btn bg-primary hover:bg-primary/90 text-white py-2 px-4 rounded-lg transition-colors"
+                                    data-text="${safeText}">
+                                ${safeLabel}
+                            </button>
+                        `;
+                    });
+
+                    // 卡片整体结构 (保留原有设计, 增加 relative 保证复制提示定位)
+                    html += `
+                        <div class="card" data-tags="${escapeHtml(tagsString)}">
+                            <div class="card-inner bg-white rounded-xl overflow-hidden card-shadow card-hover h-full relative">
+                                <!-- 卡片视图 -->
+                                <div class="card-view">
+                                    <div class="relative">
+                                        <img src="${safeImage}" alt="${safeTitle}" class="w-full h-48 object-cover">
+                                        <!-- 编辑按钮已完全移除，只留干净视图 -->
+                                    </div>
+                                    <div class="p-4">
+                                        <h3 class="text-lg font-semibold text-gray-800 mb-2">${safeTitle}</h3>
+                                    </div>
+                                </div>
+                                
+                                <!-- 详情视图 (默认隐藏) -->
+                                <div class="detail-view hidden p-4 h-full flex flex-col">
+                                    <h3 class="text-lg font-semibold text-gray-800 mb-4">${safeTitle}</h3>
+                                    <div class="flex-grow flex flex-col gap-3">
+                                        ${buttonsHtml}
+                                    </div>
+                                    <button class="back-btn mt-4 text-gray-600 hover:text-gray-800 text-sm">
+                                        <i class="fa fa-arrow-left mr-1"></i> 返回
+                                    </button>
+                                </div>
+                                
+                                <!-- 复制成功浮层 (绝对定位) -->
+                                <div class="copy-success hidden absolute inset-0 bg-black/70 flex items-center justify-center text-white text-lg font-medium rounded-xl">
+                                    复制成功!
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+
+                cardsGrid.innerHTML = html;
+            }
+
+            // 简单的转义函数 (防XSS)
+            function escapeHtml(text) {
+                if (!text) return '';
+                return String(text)
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#039;');
+            }
+
+            // ---------- 事件绑定 (委托，性能优秀) ----------
+            function bindEvents() {
+                // 1. 卡片点击：切换到详情视图 (点击 card-view 区域)
+                document.addEventListener('click', function(e) {
+                    // 卡片视图点击 (排除任何编辑相关，已经没有)
+                    const cardView = e.target.closest('.card-view');
+                    if (cardView) {
+                        // 确保不是点击了可能存在的其他干扰按钮 (已经没有编辑按钮)
+                        const cardInner = cardView.closest('.card-inner');
+                        if (cardInner) {
+                            const detailView = cardInner.querySelector('.detail-view');
+                            // 切换隐藏/显示
+                            cardView.classList.add('hidden');
+                            detailView.classList.remove('hidden');
+                        }
+                        return;
+                    }
+
+                    // 2. 返回按钮：回到卡片视图
+                    const backBtn = e.target.closest('.back-btn');
+                    if (backBtn) {
+                        const cardInner = backBtn.closest('.card-inner');
+                        if (cardInner) {
+                            const detailView = cardInner.querySelector('.detail-view');
+                            const cardViewEl = cardInner.querySelector('.card-view');
+                            detailView.classList.add('hidden');
+                            cardViewEl.classList.remove('hidden');
+                        }
+                        return;
+                    }
+
+                    // 3. 复制按钮：复制文本 + 显示成功浮层 → 自动返回卡片视图
+                    const copyBtn = e.target.closest('.copy-btn');
+                    if (copyBtn) {
+                        e.preventDefault();
+                        const textToCopy = copyBtn.getAttribute('data-text') || '';
+                        const cardInner = copyBtn.closest('.card-inner');
+                        const successMsg = cardInner.querySelector('.copy-success');
+                        const detailView = cardInner.querySelector('.detail-view');
+                        const cardViewEl = cardInner.querySelector('.card-view');
+
+                        // 使用 Clipboard API
+                        if (navigator.clipboard && navigator.clipboard.writeText) {
+                            navigator.clipboard.writeText(textToCopy).then(() => {
+                                // 显示成功提示
+                                successMsg.classList.remove('hidden');
+                                
+                                // 1.5秒后: 隐藏浮层，返回卡片视图 (符合“复制成功→直接返回默认状态”)
+                                setTimeout(() => {
+                                    successMsg.classList.add('hidden');
+                                    detailView.classList.add('hidden');
+                                    cardViewEl.classList.remove('hidden');
+                                }, 1500);
+                            }).catch(err => {
+                                console.warn('复制失败: ', err);
+                                // 降级提示 (可选)
+                                alert('复制失败，请手动复制');
+                            });
+                        } else {
+                            // 极旧浏览器降级
+                            const textarea = document.createElement('textarea');
+                            textarea.value = textToCopy;
+                            document.body.appendChild(textarea);
+                            textarea.select();
+                            try {
+                                document.execCommand('copy');
+                                successMsg.classList.remove('hidden');
+                                setTimeout(() => {
+                                    successMsg.classList.add('hidden');
+                                    detailView.classList.add('hidden');
+                                    cardViewEl.classList.remove('hidden');
+                                }, 1500);
+                            } catch (err) {
+                                alert('复制失败');
+                            }
+                            document.body.removeChild(textarea);
+                        }
+                        return;
+                    }
+                });
+
+                // 4. 标签筛选逻辑
+                tagContainer.addEventListener('click', function(e) {
+                    const tagBtn = e.target.closest('.filter-tag');
+                    if (!tagBtn) return;
+
+                    const selectedTag = tagBtn.getAttribute('data-tag');
+                    
+                    // 更新按钮激活样式
+                    document.querySelectorAll('.filter-tag').forEach(btn => {
+                        btn.classList.remove('active', 'bg-primary', 'text-white');
+                        btn.classList.add('bg-gray-200', 'hover:bg-primary', 'hover:text-white');
+                    });
+                    tagBtn.classList.add('active', 'bg-primary', 'text-white');
+                    tagBtn.classList.remove('bg-gray-200', 'hover:bg-primary', 'hover:text-white');
+
+                    // 过滤卡片
+                    const allCards = document.querySelectorAll('.card');
+                    allCards.forEach(card => {
+                        if (selectedTag === 'all') {
+                            card.style.display = '';
+                        } else {
+                            const cardTags = card.getAttribute('data-tags') || '';
+                            // 使用分割数组进行精确匹配 (避免 'web' 匹配到 'webdev')
+                            const tagsArray = cardTags.split(',').map(t => t.trim());
+                            if (tagsArray.includes(selectedTag)) {
+                                card.style.display = '';
+                            } else {
+                                card.style.display = 'none';
+                            }
+                        }
+                    });
+                });
+            }
+
+            // ---------- 初始化页面 ----------
+            function init() {
+                renderFilterTags();   // 生成标签按钮
+                renderCards();        // 生成卡片
+                bindEvents();         // 绑定交互 (委托)
+            }
+
+            // 启动一切
+            init();
+
+            // (可选) 如果希望数据从外部 JSON 加载，可替换 itemsData 的赋值，
+            // 但为了纯静态一键部署，内置数据最稳定。
+        })();
+    </script>
+
+    <!-- 注：完全移除编辑模态框、PHP 逻辑、编辑按钮，所有标签和卡片均由 JS 动态渲染 -->
+</body>
+</html>
